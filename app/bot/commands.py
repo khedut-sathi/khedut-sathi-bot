@@ -2,73 +2,48 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from app.bot.keyboards import main_menu_keyboard, language_keyboard, crop_selection_keyboard
+from app.bot.onboarding import start_onboarding
 from app.database.queries import get_or_create_user, update_user_language, log_analytics
 from app.services.mandi import (
     fetch_mandi_prices_api, resolve_crop, resolve_district, format_price_response,
 )
 from app.services.weather import get_weather
 
-WELCOME_GU = """🌾 *ખેડૂતસાથી માં આપનું સ્વાગત છે!*
-
-હું તમારો AI ખેતી સહાયક છું. હું તમને આ બાબતોમાં મદદ કરી શકું:
-
-📸 *રોગ ઓળખો* — પાકનો ફોટો મોકલો, રોગ જાણો
-💰 *ભાવ જુઓ* — મંડીના ભાવ ચેક કરો
-🎤 *અવાજ* — ગુજરાતીમાં બોલીને પૂછો
-🌤 *હવામાન* — તમારા વિસ્તારનું હવામાન
-
-નીચેના બટન વાપરો અથવા સીધો ફોટો/અવાજ મોકલો!"""
-
-WELCOME_HI = """🌾 *खेडूतसाथी में आपका स्वागत है!*
-
-मैं आपका AI खेती सहायक हूं। मैं इन बातों में मदद कर सकता हूं:
-
-📸 *रोग पहचानो* — फसल का फोटो भेजो, रोग जानो
-💰 *भाव देखो* — मंडी के भाव चेक करो
-🎤 *आवाज* — हिंदी में बोलकर पूछो
-🌤 *मौसम* — अपने इलाके का मौसम
-
-नीचे के बटन इस्तेमाल करो या सीधा फोटो/आवाज भेजो!"""
-
 HELP_GU = """📋 *ખેડૂતસાથી — મદદ*
 
 🔹 *રોગ ઓળખવા* — પાકનો ફોટો મોકલો
-🔹 `/price કપાસ રાજકોટ` — મંડી ભાવ
-🔹 `/weather રાજકોટ` — હવામાન
-🔹 `/language` — ભાષા બદલો (ગુજરાતી/હિંદી)
-🔹 `/feedback તમારો મેસેજ` — તમારો અભિપ્રાય
+🔹 *ભાવ જોવા* — "mugfali bhav kodinar" ટાઈપ કરો
+🔹 *હવામાન* — "kodinar ma varsad?" ટાઈપ કરો
+🔹 `/language` — ભાષા બદલો
+🔹 `/feedback` — અભિપ્રાય
 
-🎤 *અવાજ* — ગુજરાતીમાં વોઈસ મેસેજ મોકલો
-💬 *ચેટ* — કોઈ પણ ખેતી વિષે સવાલ ટાઈપ કરો!"""
+🎤 ગુજરાતીમાં વોઈસ મેસેજ મોકલો!
+💬 કોઈ પણ ખેતી વિષે સવાલ ટાઈપ કરો!
+
+💰 *"મારા ભાવ"* — એક ટેપમાં તમારા પાકના ભાવ
+🌤 *"મારું હવામાન"* — એક ટેપમાં તમારા ગામનું હવામાન"""
 
 HELP_HI = """📋 *खेडूतसाथी — मदद*
 
 🔹 *रोग पहचानो* — फसल का फोटो भेजो
-🔹 `/price कपास राजकोट` — मंडी भाव
-🔹 `/weather राजकोट` — मौसम
-🔹 `/language` — भाषा बदलो (गुजराती/हिंदी)
-🔹 `/feedback आपका मेसेज` — आपकी राय
+🔹 *भाव देखो* — "mugfali bhav kodinar" टाइप करो
+🔹 *मौसम* — "kodinar ma varsad?" टाइप करो
+🔹 `/language` — भाषा बदलो
+🔹 `/feedback` — राय
 
-🎤 *आवाज* — हिंदी में वॉइस मेसेज भेजो
-💬 *चैट* — कोई भी खेती का सवाल टाइप करो!"""
+🎤 हिंदी में वॉइस मेसेज भेजो!
+💬 कोई भी खेती का सवाल टाइप करो!
+
+💰 *"मेरे भाव"* — एक टैप में आपकी फसल के भाव
+🌤 *"मेरा मौसम"* — एक टैप में आपके गाँव का मौसम"""
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    db_user = get_or_create_user(
-        telegram_id=user.id,
-        first_name=user.first_name or "",
-    )
-    lang = db_user.get("language", "gu")
-    welcome = WELCOME_GU if lang == "gu" else WELCOME_HI
-    await update.message.reply_text(
-        welcome, parse_mode="Markdown", reply_markup=main_menu_keyboard(),
-    )
+    await start_onboarding(update, context)
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    db_user = get_or_create_user(telegram_id=user.id)
+    db_user = get_or_create_user(telegram_id=update.effective_user.id)
     lang = db_user.get("language", "gu")
     await update.message.reply_text(
         HELP_GU if lang == "gu" else HELP_HI, parse_mode="Markdown",
@@ -91,8 +66,7 @@ async def language_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def disease_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    db_user = get_or_create_user(telegram_id=user.id)
+    db_user = get_or_create_user(telegram_id=update.effective_user.id)
     lang = db_user.get("language", "gu")
     if lang == "gu":
         msg = "🌱 પાક પસંદ કરો અથવા સીધો ફોટો મોકલો:"
@@ -102,28 +76,27 @@ async def disease_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def price_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    db_user = get_or_create_user(telegram_id=user.id)
+    db_user = get_or_create_user(telegram_id=update.effective_user.id)
     lang = db_user.get("language", "gu")
 
     args = context.args
     if not args:
         if lang == "gu":
-            msg = "💰 ભાવ જોવા માટે:\n`/price કપાસ રાજકોટ`\n\nઉદાહરણ:\n`/price groundnut junagadh`\n`/price જીરું`"
+            msg = "💰 ભાવ જોવા:\n`/price કપાસ રાજકોટ`\n\nઅથવા ટાઈપ કરો:\n`mugfali bhav kodinar`"
         else:
-            msg = "💰 भाव देखने के लिए:\n`/price कपास राजकोट`\n\nउदाहरण:\n`/price groundnut junagadh`\n`/price जीरा`"
+            msg = "💰 भाव देखने के लिए:\n`/price कपास राजकोट`\n\nया टाइप करें:\n`mugfali bhav kodinar`"
         await update.message.reply_text(msg, parse_mode="Markdown")
         return
 
     query_text = " ".join(args)
     crop = resolve_crop(query_text)
-    district = resolve_district(query_text)
+    district = resolve_district(query_text) or db_user.get("district")
 
     if not crop:
         if lang == "gu":
-            msg = "❌ પાક ઓળખાયો નથી. ઉદાહરણ: `/price કપાસ રાજકોટ`"
+            msg = "❌ પાક ઓળખાયો નથી. ઉદાહરણ: `mugfali bhav rajkot`"
         else:
-            msg = "❌ फसल पहचानी नहीं गई। उदाहरण: `/price कपास राजकोट`"
+            msg = "❌ फसल पहचानी नहीं गई। उदाहरण: `mugfali bhav rajkot`"
         await update.message.reply_text(msg, parse_mode="Markdown")
         return
 
@@ -141,29 +114,25 @@ async def price_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(response, parse_mode="Markdown")
         except Exception:
             await update.message.reply_text(response)
-    except Exception as e:
+    except Exception:
         await wait_msg.delete()
-        if lang == "gu":
-            await update.message.reply_text("❌ ભાવ મેળવવામાં ભૂલ. કૃપા કરીને પછી પ્રયાસ કરો.")
-        else:
-            await update.message.reply_text("❌ भाव लाने में त्रुटि। कृपया बाद में प्रयास करें।")
+        await update.message.reply_text("❌ ભાવ મેળવવામાં ભૂલ.")
 
 
 async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    db_user = get_or_create_user(telegram_id=user.id)
+    db_user = get_or_create_user(telegram_id=update.effective_user.id)
     lang = db_user.get("language", "gu")
 
     args = context.args
-    if not args:
+    city = " ".join(args) if args else db_user.get("district")
+
+    if not city:
         if lang == "gu":
             msg = "🌤 હવામાન જોવા:\n`/weather રાજકોટ`"
         else:
             msg = "🌤 मौसम देखने के लिए:\n`/weather राजकोट`"
         await update.message.reply_text(msg, parse_mode="Markdown")
         return
-
-    city = " ".join(args)
 
     if lang == "gu":
         wait_msg = await update.message.reply_text("🌤 હવામાન તપાસી રહ્યા છીએ... ⏳")
@@ -178,17 +147,13 @@ async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(response, parse_mode="Markdown")
         except Exception:
             await update.message.reply_text(response)
-    except Exception as e:
+    except Exception:
         await wait_msg.delete()
-        if lang == "gu":
-            await update.message.reply_text("❌ હવામાન માહિતી મેળવવામાં ભૂલ.")
-        else:
-            await update.message.reply_text("❌ मौसम जानकारी लाने में त्रुटि।")
+        await update.message.reply_text("❌ હવામાન માહિતી મેળવવામાં ભૂલ.")
 
 
 async def feedback_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    db_user = get_or_create_user(telegram_id=user.id)
+    db_user = get_or_create_user(telegram_id=update.effective_user.id)
     lang = db_user.get("language", "gu")
 
     args = context.args
@@ -200,8 +165,7 @@ async def feedback_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(msg, parse_mode="Markdown")
         return
 
-    feedback_text = " ".join(args)
-    log_analytics(db_user["id"], "feedback", {"text": feedback_text})
+    log_analytics(db_user["id"], "feedback", {"text": " ".join(args)})
 
     if lang == "gu":
         await update.message.reply_text("🙏 તમારો અભિપ્રાય માટે આભાર!")

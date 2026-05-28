@@ -34,9 +34,16 @@ def language_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(buttons)
 
 
-def main_menu_keyboard() -> ReplyKeyboardMarkup:
-    buttons = [
-        ["📸 રોગ ઓળખો", "💰 ભાવ જુઓ"],
-        ["🌤 હવામાન", "❓ મદદ"],
-    ]
+def main_menu_keyboard(db_user: dict = None) -> ReplyKeyboardMarkup:
+    if db_user and db_user.get("onboarding_complete"):
+        buttons = [
+            ["💰 મારા ભાવ", "🌤 મારું હવામાન"],
+            ["📸 રોગ ઓળખો", "🌱 મારો પાક"],
+            ["📞 મિત્રને જોડો", "❓ મદદ"],
+        ]
+    else:
+        buttons = [
+            ["📸 રોગ ઓળખો", "💰 ભાવ જુઓ"],
+            ["🌤 હવામાન", "❓ મદદ"],
+        ]
     return ReplyKeyboardMarkup(buttons, resize_keyboard=True)

@@ -1,30 +1,16 @@
-"""Local development: run the bot in polling mode (no webhook needed)."""
+"""Local development: run the bot in polling mode."""
 import logging
 from telegram.ext import (
-    Application,
-    CommandHandler,
-    MessageHandler,
-    CallbackQueryHandler,
-    filters,
+    Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters,
 )
 
 from app.config import settings
 from app.bot.commands import (
-    start_command,
-    help_command,
-    language_command,
-    language_callback,
-    disease_command,
-    price_command,
-    weather_command,
-    feedback_command,
+    start_command, help_command, language_command, language_callback,
+    disease_command, price_command, weather_command, feedback_command,
 )
-from app.bot.handlers import (
-    handle_photo,
-    handle_voice,
-    handle_text,
-    crop_selection_callback,
-)
+from app.bot.handlers import handle_photo, handle_voice, handle_text, crop_selection_callback
+from app.bot.onboarding import handle_onboarding_callback
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -33,11 +19,7 @@ logging.basicConfig(
 
 
 def main():
-    app = (
-        Application.builder()
-        .token(settings.telegram_bot_token)
-        .build()
-    )
+    app = Application.builder().token(settings.telegram_bot_token).build()
 
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("help", help_command))
@@ -47,16 +29,15 @@ def main():
     app.add_handler(CommandHandler("weather", weather_command))
     app.add_handler(CommandHandler("feedback", feedback_command))
 
+    app.add_handler(CallbackQueryHandler(handle_onboarding_callback, pattern="^ob_"))
     app.add_handler(CallbackQueryHandler(language_callback, pattern="^lang_"))
     app.add_handler(CallbackQueryHandler(crop_selection_callback, pattern="^crop_"))
 
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, handle_voice))
-    app.add_handler(
-        MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text)
-    )
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 
-    print("🌾 KhedutSathi bot starting in polling mode...")
+    print("🌾 KhedutSathi bot starting...")
     app.run_polling(drop_pending_updates=True)
 
 

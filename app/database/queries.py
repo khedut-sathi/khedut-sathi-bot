@@ -22,24 +22,26 @@ def get_or_create_user(telegram_id: int, first_name: str = "", language: str = "
     return result.data[0]
 
 
-def update_user_language(telegram_id: int, language: str) -> dict:
+def update_user_profile(telegram_id: int, **fields) -> dict:
     result = (
         supabase.table("users")
-        .update({"language": language})
+        .update(fields)
         .eq("telegram_id", telegram_id)
         .execute()
     )
     return result.data[0] if result.data else {}
+
+
+def update_user_language(telegram_id: int, language: str) -> dict:
+    return update_user_profile(telegram_id, language=language)
 
 
 def update_user_district(telegram_id: int, district: str) -> dict:
-    result = (
-        supabase.table("users")
-        .update({"district": district})
-        .eq("telegram_id", telegram_id)
-        .execute()
-    )
-    return result.data[0] if result.data else {}
+    return update_user_profile(telegram_id, district=district)
+
+
+def is_onboarding_complete(db_user: dict) -> bool:
+    return db_user.get("onboarding_complete", False)
 
 
 def log_analytics(user_id: int, event_type: str, metadata: dict = None):
