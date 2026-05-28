@@ -8,7 +8,36 @@ from app.services.disease_detection import diagnose_disease
 from app.services.ai_chat import farming_chat
 from app.services.voice import transcribe_voice
 from app.services.weather import is_weather_query, smart_weather_answer
+from app.services.mandi import resolve_crop, resolve_district, fetch_mandi_prices_api, format_price_response
 from app.utils.image import compress_image
+
+PRICE_KEYWORDS = [
+    "bhav", "ભાવ", "भाव", "price", "rate", "rates", "bazaar", "bazar",
+    "mandi", "મંડી", "मंडी", "apmc", "market", "kimat", "કિંમત", "कीमत",
+    "mol", "મોલ", "दाम", "daam", "dam",
+]
+
+DISEASE_KEYWORDS = [
+    "rog", "રોગ", "रोग", "disease", "bimari", "બીમારી", "बीमारी",
+    "kido", "કીડો", "कीड़ा", "pest", "insect", "jivat", "જીવાત",
+    "paan", "પાન", "patti", "पत्ती", "leaf", "spot", "yellow",
+    "sukay", "સુકાય", "sukhay", "wilt", "rot", "fungus",
+    "dawaa", "દવા", "दवा", "spray", "medicine",
+]
+
+
+def is_price_query(text: str) -> bool:
+    text_lower = text.lower()
+    has_price_kw = any(kw in text_lower for kw in PRICE_KEYWORDS)
+    has_crop = resolve_crop(text) is not None
+    return has_price_kw and has_crop
+
+
+def is_disease_query(text: str) -> bool:
+    text_lower = text.lower()
+    has_disease_kw = any(kw in text_lower for kw in DISEASE_KEYWORDS)
+    has_crop = resolve_crop(text) is not None
+    return has_disease_kw and has_crop
 
 logger = logging.getLogger(__name__)
 
@@ -158,6 +187,54 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if text == "❓ મદદ":
         from app.bot.commands import help_command
         await help_command(update, context)
+        return
+
+    # Detect price queries: "mugfali bhav kodinar", "કપાસ ભાવ રાજકોટ", "cotton rate"
+    if is_price_query(text):
+        crop = resolve_crop(text)
+        district = resolve_district(text)
+
+        if lang == "gu":
+            wait_msg = await update.message.reply_text("💰 ભાવ શોધી રહ્યા છીએ... ⏳")
+        else:
+            wait_msg = await update.message.reply_text("💰 भाव खोज रहे हैं... ⏳")
+
+        try:
+            prices = await fetch_mandi_prices_api(crop)
+            response = format_price_response(prices, crop, district, lang)
+            log_analytics(db_user["id"], "price_query", {"crop": crop, "district": district, "query": text[:200]})
+            await wait_msg.delete()
+            try:
+                await update.message.reply_text(response, parse_mode="Markdown")
+            except Exception:
+                await update.message.reply_text(response)
+        except Exception as e:
+            logger.error(f"Price query error: {e}", exc_info=True)
+            try:
+                await wait_msg.delete()
+            except Exception:
+                pass
+            if lang == "gu":
+                await update.message.reply_text("❌ ભાવ મેળવવામાં ભૂલ. કૃપા કરીને પછી પ્રયાસ કરો.")
+            else:
+                await update.message.reply_text("❌ भाव लाने में त्रुटि। कृपया बाद में प्रयास करें।")
+        return
+
+    # Detect disease queries: "kapas ma rog aavyo", "કપાસમાં કીડો"
+    if is_disease_query(text):
+        crop = resolve_crop(text)
+        context.user_data["selected_crop"] = crop
+
+        from app.bot.commands import disease_command
+        if lang == "gu":
+            msg = f"🌱 *{crop}* માં રોગ/જીવાત વિશે જાણવા પાકનો ફોટો મોકલો — હું ઓળખી આપીશ!"
+        else:
+            msg = f"🌱 *{crop}* में रोग/कीट के बारे में जानने के लिए फसल का फोटो भेजें — मैं पहचान दूंगा!"
+
+        try:
+            await update.message.reply_text(msg, parse_mode="Markdown")
+        except Exception:
+            await update.message.reply_text(msg)
         return
 
     # Detect weather questions and use real data
